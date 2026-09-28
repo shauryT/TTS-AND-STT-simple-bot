@@ -2,193 +2,157 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Voice Chatbot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Assistant</title>
 <style>
-:root{--bg:#070707;--card:#111;--text:#f5f5f5;--muted:#8b8b8b;--accent:#e50914;--border:#292929}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{background:radial-gradient(circle at 50% 35%,rgba(229,9,20,.12),transparent 32%),radial-gradient(circle at 10% 90%,rgba(229,9,20,.06),transparent 30%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center}
-.app{width:100%;max-width:700px;height:100%;display:flex;flex-direction:column;padding:0 18px}
-header{padding:22px 0 12px;text-align:center}
-h1{font-size:1.35rem;margin:0 0 14px;font-weight:650;letter-spacing:.3px}
-.row{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
-select{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;outline:none}
-select:focus{border-color:var(--accent)}
-#log{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:18px 3px;scroll-behavior:smooth}
-#log::-webkit-scrollbar{width:4px}
-#log::-webkit-scrollbar-thumb{background:#333;border-radius:10px}
-.msg{max-width:82%;padding:12px 16px;border-radius:18px;line-height:1.5;border:1px solid var(--border);animation:in .25s ease-out;box-shadow:0 5px 20px rgba(0,0,0,.25)}
-.user{align-self:flex-end;background:linear-gradient(135deg,#2a0d0f,#170909);border-color:#4b171b;border-bottom-right-radius:5px}
-.bot{align-self:flex-start;background:linear-gradient(135deg,#171717,#0f0f0f);border-color:#303030;border-bottom-left-radius:5px}
-.bot::before{content:"AI";display:block;color:var(--accent);font-size:.68rem;font-weight:700;letter-spacing:1px;margin-bottom:4px}
-#status{text-align:center;font-size:.8rem;color:var(--muted);min-height:1.3em}
-.mic-area{display:flex;flex-direction:column;align-items:center;padding:8px 0 18px}
-#mic{width:115px;height:115px;border-radius:50%;background:linear-gradient(145deg,#ff1b27,#b8000a);color:#fff;border:2px solid #ff4b53;font-size:2.7rem;cursor:pointer;box-shadow:0 0 25px rgba(229,9,20,.35),0 0 60px rgba(229,9,20,.12),inset 0 2px 4px rgba(255,255,255,.2);transition:.25s}
-#mic:hover{transform:scale(1.06)}
-#mic.on{animation:pulse 1.1s infinite;background:linear-gradient(145deg,#ff3039,#d0000b)}
-.mic-label{margin-top:10px;font-size:.78rem;color:#777}
-.bar{display:flex;gap:10px;align-items:center;padding:4px 0 8px}
-input[type=text]{flex:1;min-width:0;padding:13px 16px;border-radius:25px;border:1px solid var(--border);background:#111;color:var(--text);font-size:.95rem;outline:none}
-input[type=text]:focus{border-color:#65171c}
-input[type=text]::placeholder{color:#666}
-#send{padding:13px 18px;border-radius:24px;border:none;background:#e9e9e9;color:#090909;font-weight:600;cursor:pointer}
-#send:hover{background:#fff}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(229,9,20,.65)}70%{box-shadow:0 0 0 22px rgba(229,9,20,0)}100%{box-shadow:0 0 0 0 rgba(229,9,20,0)}}
-@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+:root{--bg:#f6f5f2;--card:#fff;--text:#1d1d1b;--muted:#77756e;--accent:#1f6f5c;--user:#e4efe9;--border:#e2dfd6;--warn:#b3421f}
+@media (prefers-color-scheme:dark){:root{--bg:#161817;--card:#212423;--text:#eeeeea;--muted:#9a9d97;--user:#23342e;--border:#333836}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center}
+.app{width:100%;max-width:700px;height:100%;display:flex;flex-direction:column;padding:0 14px}
+header{padding:14px 0 8px}h1{font-size:1.15rem;margin:0 0 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:.85rem;color:var(--muted)}
+select{padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.9rem}
+#log{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:8px 0}
+.msg{max-width:85%;padding:10px 14px;border-radius:14px;line-height:1.45;border:1px solid var(--border)}
+.user{align-self:flex-end;background:var(--user)}.bot{align-self:flex-start;background:var(--card)}
+.tag{align-self:flex-start;font-size:.75rem;color:var(--warn);margin:-6px 0 0 6px}
+#status{text-align:center;font-size:.85rem;color:var(--muted);min-height:1.3em}
+.bar{display:flex;gap:8px;align-items:center;padding:8px 0}
+input[type=text]{flex:1;min-width:0;padding:12px 14px;border-radius:24px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1rem}
+button{border:none;cursor:pointer;font-size:1rem}
+#mic{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;font-size:1.3rem;flex:none}
+#mic.on{animation:pulse 1.1s infinite}
+#send{padding:12px 16px;border-radius:24px;background:var(--text);color:var(--bg)}
+.hint{font-size:.75rem;color:var(--muted);text-align:center;margin:0 0 12px}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(31,111,92,.6)}100%{box-shadow:0 0 0 16px rgba(31,111,92,0)}}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>AI Voice Chatbot</h1>
+    <h1>Voice Assistant</h1>
     <div class="row">
-      <select id="lang"><option value="en-IN">English</option><option value="hi-IN">हिन्दी</option></select>
+      <select id="lang" aria-label="Language"><option value="en-IN">English</option><option value="hi-IN">हिन्दी</option></select>
       <label><input type="checkbox" id="speakOn" checked> Speak replies</label>
     </div>
   </header>
   <div id="log"></div>
   <div id="status"></div>
-  <div class="mic-area">
-    <button id="mic" aria-label="Speak">🎤</button>
-    <div class="mic-label" id="micLabel">Tap to speak</div>
-  </div>
   <div class="bar">
-    <input type="text" id="text" placeholder="Type a message..." autocomplete="off">
+    <button id="mic" aria-label="Speak">🎤</button>
+    <input type="text" id="text" placeholder="Or type here..." autocomplete="off">
     <button id="send">Send</button>
   </div>
+  <p class="hint">Never say card numbers, PINs or OTPs.</p>
 </div>
-
 <script>
 const $ = id => document.getElementById(id);
-let history = [], busy = false, recording = false;
-let finalText = "", silenceTimer = null;
-
-const status = t => $("status").textContent = t;
+let history = [], busy = false;
 
 function add(text, cls) {
-  const d = document.createElement("div");
-  d.className = "msg " + cls;
-  d.textContent = text;
-  $("log").append(d);
-  $("log").scrollTop = $("log").scrollHeight;
+  const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text;
+  $('log').appendChild(d); $('log').scrollTop = $('log').scrollHeight;
 }
+function tag(text) {
+  const d = document.createElement('div'); d.className = 'tag'; d.textContent = text; $('log').appendChild(d);
+}
+const status = t => $('status').textContent = t;
 
-function speak(text) {
-  if (!$("speakOn").checked || !("speechSynthesis" in window)) return;
+function speak(t) {
+  if (!$('speakOn').checked || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = $("lang").value;
-  u.onstart = () => status("Speaking...");
-  u.onend = () => { if (!recording && !busy) status(""); };
+  const u = new SpeechSynthesisUtterance(t); u.lang = $('lang').value;
+  u.onstart = () => status('Speaking...'); u.onend = () => status('');
   speechSynthesis.speak(u);
 }
 
-async function send(textOverride) {
-  const text = (textOverride ?? $("text").value).trim();
-  if (!text || busy) return;
-  $("text").value = "";
-  busy = true;
-  add(text, "user");
-  status("Thinking...");
+function greet() {
+  const g = "Hi! I'm your voice assistant. Ask me anything.";
+  history = []; $('log').innerHTML = ''; add(g, 'bot'); speak(g);
+}
 
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 45000);
-
+async function send() {
+  const t = $('text').value.trim();
+  if (!t || busy) return;
+  $('text').value = ''; busy = true; add(t, 'user'); status('Thinking...');
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      signal: ctrl.signal,
-      body: JSON.stringify({message: text, history: history.slice(-6)})
+    const r = await fetch('/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: t, history: history.slice(-6) })
     });
-    clearTimeout(tid);
-    if (!res.ok) throw new Error(res.status === 429 ? "Too many requests. Slow down." : `Server error ${res.status}`);
-    const data = await res.json();
-    add(data.reply, "bot");
-    history.push({role: "user", content: text}, {role: "assistant", content: data.reply});
-    status("");
-    speak(data.reply);
-  } catch (e) {
-    clearTimeout(tid);
-    add(e.name === "AbortError" ? "Server took too long. Try again." : (e.message || "Something went wrong."), "bot");
-    status("");
-  }
+    if (!r.ok) throw new Error(r.status === 429 ? 'Too many requests. Please wait a moment.' : 'Server error.');
+    const d = await r.json();
+    add(d.reply, 'bot');
+    history.push({ role: 'user', content: t }, { role: 'assistant', content: d.reply });
+    status(''); speak(d.reply);
+  } catch (e) { add(e.message || 'Something went wrong.', 'bot'); status(''); }
   busy = false;
 }
 
-add("Hello! How can I help you today?", "bot");
-
-/* ---------- Speech recognition ---------- */
+/* ---------- Speech recognition (fixed) ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null;
+let rec = null, listening = false, finalText = "", silenceTimer = null;
 
 if (SR) {
   rec = new SR();
-  rec.continuous = true;
   rec.interimResults = true;
-  rec.lang = "en-IN";
+  rec.continuous = true;          // keep listening through pauses
+  rec.lang = 'en-IN';
   rec.maxAlternatives = 1;
 
   rec.onstart = () => {
-    recording = true;
-    finalText = "";
-    $("mic").classList.add("on");
-    $("micLabel").textContent = "Listening...";
-    status("Listening...");
+    listening = true; finalText = "";
+    $('mic').classList.add('on');
+    status('Listening...');
   };
 
   rec.onresult = e => {
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t + " ";
-      else interim += t;
+      const chunk = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += chunk + " ";
+      else interim += chunk;
     }
-    $("text").value = (finalText + interim).trim();
+    $('text').value = (finalText + interim).trim();
 
-    // Auto-send after 1.5s of silence
+    // auto-send after 1.5s of silence
     clearTimeout(silenceTimer);
     silenceTimer = setTimeout(() => {
-      if (recording && $("text").value.trim()) rec.stop();
+      if (listening && $('text').value.trim()) rec.stop();
     }, 1500);
   };
 
   rec.onerror = e => {
-    if (e.error === "no-speech" || e.error === "aborted") return;
-    status(e.error === "not-allowed" ? "Microphone access blocked." : "Mic error: " + e.error);
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    status(e.error === 'not-allowed' ? 'Microphone access was blocked.' : 'Mic error: ' + e.error);
   };
 
   rec.onend = () => {
-    recording = false;
+    listening = false;
     clearTimeout(silenceTimer);
-    $("mic").classList.remove("on");
-    const text = (finalText + " " + $("text").value).trim() || $("text").value.trim();
-    finalText = "";
-    if (text && !busy) {
-      $("micLabel").textContent = "Processing...";
-      send(text);
-    } else {
-      $("micLabel").textContent = "Tap to speak";
-      status("");
-    }
-  };
-
-  $("mic").onclick = () => {
-    speechSynthesis.cancel();
-    if (recording) { rec.stop(); return; }
-    rec.lang = $("lang").value;
-    try { rec.start(); } catch (_) {}
+    $('mic').classList.remove('on');
+    const text = $('text').value.trim();
+    if (text && !busy) send();
+    else status('');
   };
 } else {
-  $("mic").disabled = true;
-  $("mic").style.opacity = ".4";
-  $("micLabel").textContent = "Speech recognition unavailable";
-  status("Use Chrome or Edge.");
+  $('mic').disabled = true; $('mic').style.opacity = .4;
+  status('Speech recognition needs Chrome or Edge. You can still type.');
 }
 
-$("send").onclick = () => send();
-$("text").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+$('mic').onclick = () => {
+  if (!rec) return;
+  speechSynthesis.cancel();
+  if (listening) { rec.stop(); return; }
+  rec.lang = $('lang').value;
+  finalText = "";
+  try { rec.start(); } catch (_) {}
+};
+$('send').onclick = send;
+$('text').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+greet();
 </script>
 </body>
 </html>
