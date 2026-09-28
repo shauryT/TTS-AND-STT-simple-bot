@@ -1,785 +1,988 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Test Chatbot</title>
 
-<style>
-:root{
-  --bg:#070707;
-  --card:#111111;
-  --card2:#171717;
-  --text:#f5f5f5;
-  --muted:#8b8b8b;
-  --accent:#e50914;
-  --accent2:#ff2934;
-  --border:#292929;
-}
+    <meta charset="utf-8">
 
-*{
-  box-sizing:border-box;
-}
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
 
-html,body{
-  height:100%;
-  margin:0;
-}
+    <title>AI Voice Chatbot</title>
 
-body{
-  background:
-    radial-gradient(circle at 50% 35%, rgba(229,9,20,.12), transparent 32%),
-    radial-gradient(circle at 10% 90%, rgba(229,9,20,.06), transparent 30%),
-    var(--bg);
-  color:var(--text);
-  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
-  display:flex;
-  justify-content:center;
-}
 
-.app{
-  width:100%;
-  max-width:700px;
-  height:100%;
-  display:flex;
-  flex-direction:column;
-  padding:0 18px;
-}
+    <style>
 
-/* HEADER */
+        :root {
+            --bg: #070707;
+            --card: #111111;
+            --text: #f5f5f5;
+            --muted: #8b8b8b;
+            --accent: #e50914;
+            --border: #292929;
+        }
 
-header{
-  padding:22px 0 12px;
-  text-align:center;
-}
 
-h1{
-  font-size:1.35rem;
-  margin:0 0 14px;
-  font-weight:650;
-  letter-spacing:.3px;
-}
+        * {
+            box-sizing: border-box;
+        }
 
-.row{
-  display:flex;
-  justify-content:center;
-  gap:9px;
-  flex-wrap:wrap;
-  align-items:center;
-  font-size:.8rem;
-  color:var(--muted);
-}
 
-select{
-  padding:8px 12px;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:var(--card);
-  color:var(--text);
-  font-size:.85rem;
-  outline:none;
-}
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
 
-select:focus{
-  border-color:var(--accent);
-}
 
-/* CHAT */
+        body {
+            background:
+                radial-gradient(
+                    circle at 50% 35%,
+                    rgba(229, 9, 20, 0.12),
+                    transparent 32%
+                ),
+                radial-gradient(
+                    circle at 10% 90%,
+                    rgba(229, 9, 20, 0.06),
+                    transparent 30%
+                ),
+                var(--bg);
 
-#log{
-  flex:1;
-  overflow-y:auto;
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  padding:18px 3px;
-  scroll-behavior:smooth;
-}
+            color: var(--text);
 
-#log::-webkit-scrollbar{
-  width:4px;
-}
+            font-family:
+                system-ui,
+                -apple-system,
+                "Segoe UI",
+                sans-serif;
 
-#log::-webkit-scrollbar-thumb{
-  background:#333;
-  border-radius:10px;
-}
+            display: flex;
+            justify-content: center;
+        }
 
-/* MESSAGE BUBBLES */
 
-.msg{
-  max-width:82%;
-  padding:12px 16px;
-  border-radius:18px;
-  line-height:1.5;
-  border:1px solid var(--border);
-  position:relative;
-  animation:messageIn .25s ease-out;
-  box-shadow:0 5px 20px rgba(0,0,0,.25);
-}
+        .app {
+            width: 100%;
+            max-width: 700px;
+            height: 100%;
 
-.user{
-  align-self:flex-end;
-  background:linear-gradient(135deg,#2a0d0f,#170909);
-  border-color:#4b171b;
-  border-bottom-right-radius:5px;
-  box-shadow:0 5px 25px rgba(229,9,20,.08);
-}
+            display: flex;
+            flex-direction: column;
 
-.bot{
-  align-self:flex-start;
-  background:linear-gradient(135deg,#171717,#0f0f0f);
-  border-color:#303030;
-  border-bottom-left-radius:5px;
-  box-shadow:0 5px 25px rgba(0,0,0,.35);
-}
+            padding: 0 18px;
+        }
 
-.bot::before{
-  content:"AI";
-  display:block;
-  color:var(--accent);
-  font-size:.68rem;
-  font-weight:700;
-  letter-spacing:1px;
-  margin-bottom:4px;
-}
 
-.tag{
-  align-self:flex-start;
-  font-size:.72rem;
-  color:#ff6a70;
-  margin:-5px 0 0 8px;
-}
+        /* HEADER */
 
-/* STATUS */
+        header {
+            padding: 22px 0 12px;
+            text-align: center;
+        }
 
-#status{
-  text-align:center;
-  font-size:.85rem;
-  color:var(--muted);
-  min-height:1.3em;
-  transition:.2s;
-}
 
-/* BIG MIC */
+        h1 {
+            font-size: 1.35rem;
+            margin: 0 0 14px;
 
-.mic-area{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  padding:8px 0 14px;
-}
+            font-weight: 650;
+            letter-spacing: 0.3px;
+        }
 
-#mic{
-  width:115px;
-  height:115px;
-  border-radius:50%;
-  background:linear-gradient(145deg,#ff1b27,#b8000a);
-  color:#fff;
-  border:2px solid #ff4b53;
-  font-size:2.7rem;
-  cursor:pointer;
 
-  box-shadow:
-    0 0 25px rgba(229,9,20,.35),
-    0 0 60px rgba(229,9,20,.12),
-    inset 0 2px 4px rgba(255,255,255,.2);
+        .row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
 
-  transition:.25s;
-}
+            gap: 12px;
+            flex-wrap: wrap;
 
-#mic:hover{
-  transform:scale(1.06);
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
 
-  box-shadow:
-    0 0 35px rgba(229,9,20,.55),
-    0 0 75px rgba(229,9,20,.18),
-    inset 0 2px 4px rgba(255,255,255,.2);
-}
 
-#mic.on{
-  animation:pulse 1.1s infinite;
-  background:linear-gradient(145deg,#ff3039,#d0000b);
-}
+        select {
+            padding: 8px 12px;
 
-.mic-label{
-  margin-top:9px;
-  font-size:.78rem;
-  color:#777;
-}
+            border-radius: 10px;
+            border: 1px solid var(--border);
 
-/* TEXT INPUT */
+            background: var(--card);
+            color: var(--text);
 
-.bar{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  padding:4px 0 8px;
-}
+            font-size: 0.85rem;
+            outline: none;
+        }
 
-input[type=text]{
-  flex:1;
-  min-width:0;
-  padding:13px 16px;
-  border-radius:25px;
-  border:1px solid var(--border);
-  background:#111;
-  color:var(--text);
-  font-size:.95rem;
-  outline:none;
-  transition:.2s;
-}
 
-input[type=text]:focus{
-  border-color:#65171c;
-  box-shadow:0 0 15px rgba(229,9,20,.08);
-}
+        select:focus {
+            border-color: var(--accent);
+        }
 
-input[type=text]::placeholder{
-  color:#666;
-}
 
-#send{
-  padding:13px 18px;
-  border-radius:24px;
-  border:0;
-  background:#e9e9e9;
-  color:#090909;
-  font-weight:600;
-  cursor:pointer;
-  transition:.2s;
-}
+        /* CHAT */
 
-#send:hover{
-  background:#fff;
-  transform:translateY(-1px);
-}
+        #log {
+            flex: 1;
 
-.hint{
-  font-size:.68rem;
-  color:#555;
-  text-align:center;
-  margin:2px 0 14px;
-}
+            overflow-y: auto;
 
-/* ANIMATIONS */
+            display: flex;
+            flex-direction: column;
 
-@keyframes pulse{
-  0%{
-    box-shadow:
-      0 0 0 0 rgba(229,9,20,.65),
-      0 0 25px rgba(229,9,20,.3);
-  }
+            gap: 12px;
 
-  70%{
-    box-shadow:
-      0 0 0 22px rgba(229,9,20,0),
-      0 0 40px rgba(229,9,20,.4);
-  }
+            padding: 18px 3px;
 
-  100%{
-    box-shadow:
-      0 0 0 0 rgba(229,9,20,0),
-      0 0 25px rgba(229,9,20,.3);
-  }
-}
+            scroll-behavior: smooth;
+        }
 
-@keyframes messageIn{
-  from{
-    opacity:0;
-    transform:translateY(8px);
-  }
 
-  to{
-    opacity:1;
-    transform:translateY(0);
-  }
-}
-</style>
+        #log::-webkit-scrollbar {
+            width: 4px;
+        }
+
+
+        #log::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 10px;
+        }
+
+
+        /* MESSAGE BUBBLES */
+
+        .msg {
+            max-width: 82%;
+
+            padding: 12px 16px;
+
+            border-radius: 18px;
+
+            line-height: 1.5;
+
+            border: 1px solid var(--border);
+
+            position: relative;
+
+            animation: messageIn 0.25s ease-out;
+
+            box-shadow:
+                0 5px 20px rgba(0, 0, 0, 0.25);
+        }
+
+
+        .user {
+            align-self: flex-end;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #2a0d0f,
+                    #170909
+                );
+
+            border-color: #4b171b;
+
+            border-bottom-right-radius: 5px;
+
+            box-shadow:
+                0 5px 25px rgba(229, 9, 20, 0.08);
+        }
+
+
+        .bot {
+            align-self: flex-start;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #171717,
+                    #0f0f0f
+                );
+
+            border-color: #303030;
+
+            border-bottom-left-radius: 5px;
+
+            box-shadow:
+                0 5px 25px rgba(0, 0, 0, 0.35);
+        }
+
+
+        .bot::before {
+            content: "AI";
+
+            display: block;
+
+            color: var(--accent);
+
+            font-size: 0.68rem;
+
+            font-weight: 700;
+
+            letter-spacing: 1px;
+
+            margin-bottom: 4px;
+        }
+
+
+        /* STATUS */
+
+        #status {
+            text-align: center;
+
+            font-size: 0.8rem;
+
+            color: var(--muted);
+
+            min-height: 1.3em;
+
+            transition: 0.2s;
+        }
+
+
+        /* LARGE MICROPHONE */
+
+        .mic-area {
+            display: flex;
+
+            flex-direction: column;
+
+            align-items: center;
+
+            justify-content: center;
+
+            padding: 8px 0 18px;
+        }
+
+
+        #mic {
+            width: 115px;
+            height: 115px;
+
+            border-radius: 50%;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #ff1b27,
+                    #b8000a
+                );
+
+            color: white;
+
+            border: 2px solid #ff4b53;
+
+            font-size: 2.7rem;
+
+            cursor: pointer;
+
+            box-shadow:
+                0 0 25px rgba(229, 9, 20, 0.35),
+                0 0 60px rgba(229, 9, 20, 0.12),
+                inset 0 2px 4px rgba(255, 255, 255, 0.2);
+
+            transition: 0.25s;
+        }
+
+
+        #mic:hover {
+            transform: scale(1.06);
+
+            box-shadow:
+                0 0 35px rgba(229, 9, 20, 0.55),
+                0 0 75px rgba(229, 9, 20, 0.18),
+                inset 0 2px 4px rgba(255, 255, 255, 0.2);
+        }
+
+
+        #mic.on {
+            animation: pulse 1.1s infinite;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    #ff3039,
+                    #d0000b
+                );
+        }
+
+
+        .mic-label {
+            margin-top: 10px;
+
+            font-size: 0.78rem;
+
+            color: #777;
+        }
+
+
+        /* TEXT INPUT */
+
+        .bar {
+            display: flex;
+
+            gap: 10px;
+
+            align-items: center;
+
+            padding: 4px 0 8px;
+        }
+
+
+        input[type="text"] {
+            flex: 1;
+
+            min-width: 0;
+
+            padding: 13px 16px;
+
+            border-radius: 25px;
+
+            border: 1px solid var(--border);
+
+            background: #111;
+
+            color: var(--text);
+
+            font-size: 0.95rem;
+
+            outline: none;
+
+            transition: 0.2s;
+        }
+
+
+        input[type="text"]:focus {
+            border-color: #65171c;
+
+            box-shadow:
+                0 0 15px rgba(229, 9, 20, 0.08);
+        }
+
+
+        input[type="text"]::placeholder {
+            color: #666;
+        }
+
+
+        #send {
+            padding: 13px 18px;
+
+            border-radius: 24px;
+
+            border: none;
+
+            background: #e9e9e9;
+
+            color: #090909;
+
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition: 0.2s;
+        }
+
+
+        #send:hover {
+            background: white;
+
+            transform: translateY(-1px);
+        }
+
+
+        /* ANIMATIONS */
+
+        @keyframes pulse {
+
+            0% {
+                box-shadow:
+                    0 0 0 0 rgba(229, 9, 20, 0.65),
+                    0 0 25px rgba(229, 9, 20, 0.3);
+            }
+
+
+            70% {
+                box-shadow:
+                    0 0 0 22px rgba(229, 9, 20, 0),
+                    0 0 40px rgba(229, 9, 20, 0.4);
+            }
+
+
+            100% {
+                box-shadow:
+                    0 0 0 0 rgba(229, 9, 20, 0),
+                    0 0 25px rgba(229, 9, 20, 0.3);
+            }
+
+        }
+
+
+        @keyframes messageIn {
+
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+        }
+
+    </style>
+
 </head>
+
 
 <body>
 
+
 <div class="app">
 
-  <header>
 
-    <h1>Test Chatbot</h1>
+    <!-- HEADER -->
 
-    <div class="row">
+    <header>
 
-      <select id="bank" aria-label="Mode"></select>
+        <h1>AI Voice Chatbot</h1>
 
-      <select id="lang" aria-label="Language">
-        <option value="en-IN">English</option>
-        <option value="hi-IN">हिन्दी</option>
-      </select>
+        <div class="row">
 
-      <label>
-        <input type="checkbox" id="speakOn" checked>
-        Speak replies
-      </label>
+            <select id="lang" aria-label="Language">
+
+                <option value="en-IN">
+                    English
+                </option>
+
+                <option value="hi-IN">
+                    हिन्दी
+                </option>
+
+            </select>
+
+
+            <label>
+
+                <input
+                    type="checkbox"
+                    id="speakOn"
+                    checked
+                >
+
+                Speak replies
+
+            </label>
+
+        </div>
+
+    </header>
+
+
+
+    <!-- CHAT -->
+
+    <div id="log"></div>
+
+
+
+    <!-- STATUS -->
+
+    <div id="status"></div>
+
+
+
+    <!-- LARGE MICROPHONE -->
+
+    <div class="mic-area">
+
+        <button
+            id="mic"
+            aria-label="Speak"
+        >
+            🎤
+        </button>
+
+
+        <div
+            class="mic-label"
+            id="micLabel"
+        >
+            Tap to speak
+        </div>
 
     </div>
 
-  </header>
 
 
-  <!-- CHAT -->
+    <!-- TEXT INPUT -->
 
-  <div id="log"></div>
+    <div class="bar">
+
+        <input
+            type="text"
+            id="text"
+            placeholder="Type a message..."
+            autocomplete="off"
+        >
 
 
-  <!-- STATUS -->
+        <button id="send">
+            Send
+        </button>
 
-  <div id="status"></div>
-
-
-  <!-- BIG MICROPHONE -->
-
-  <div class="mic-area">
-
-    <button id="mic" aria-label="Speak">
-      🎤
-    </button>
-
-    <div class="mic-label" id="micLabel">
-      Tap to speak
     </div>
 
-  </div>
-
-
-  <!-- TEXT INPUT -->
-
-  <div class="bar">
-
-    <input
-      type="text"
-      id="text"
-      placeholder="Or type here..."
-      autocomplete="off"
-    >
-
-    <button id="send">
-      Send
-    </button>
-
-  </div>
-
-
-  <p class="hint">
-    Never say card numbers, PINs or OTPs. Bank modes use fictional data.
-  </p>
 
 </div>
 
 
+
 <script>
 
-const $ = id => document.getElementById(id);
-
-let banks = [];
-let history = [];
-let busy = false;
+    const $ = id =>
+        document.getElementById(id);
 
 
-/* ADD MESSAGE */
+    let history = [];
 
-function add(text, cls){
+    let busy = false;
 
-  const d = document.createElement('div');
-
-  d.className = 'msg ' + cls;
-
-  d.textContent = text;
-
-  $('log').appendChild(d);
-
-  $('log').scrollTop = $('log').scrollHeight;
-}
+    let listening = false;
 
 
-/* ESCALATION TAG */
 
-function tag(text){
+    /* ADD MESSAGE */
 
-  const d = document.createElement('div');
+    function add(text, cls) {
 
-  d.className = 'tag';
-
-  d.textContent = text;
-
-  $('log').appendChild(d);
-}
+        const d =
+            document.createElement("div");
 
 
-/* STATUS */
-
-const status = t => $('status').textContent = t;
-
-
-/* TEXT TO SPEECH */
-
-function speak(t){
-
-  if(
-    !$('speakOn').checked ||
-    !('speechSynthesis' in window)
-  )
-    return;
-
-  speechSynthesis.cancel();
-
-  const u = new SpeechSynthesisUtterance(t);
-
-  u.lang = $('lang').value;
-
-  u.onstart = () => {
-    status('Speaking...');
-  };
-
-  u.onend = () => {
-    if(!listening && !busy)
-      status('');
-  };
-
-  speechSynthesis.speak(u);
-}
+        d.className =
+            "msg " + cls;
 
 
-/* GREETING */
-
-function greet(){
-
-  const b =
-    banks.find(
-      x => x.id === $('bank').value
-    );
-
-  if(!b)
-    return;
-
-  history = [];
-
-  $('log').innerHTML = '';
-
-  add(b.greeting,'bot');
-
-  speak(b.greeting);
-}
+        d.textContent = text;
 
 
-/* SEND MESSAGE */
-
-async function send(){
-
-  const t =
-    $('text').value.trim();
-
-  if(!t || busy)
-    return;
-
-  $('text').value = '';
-
-  busy = true;
-
-  add(t,'user');
-
-  status('Thinking...');
-
-  try{
-
-    const r =
-      await fetch('/api/chat',{
-
-        method:'POST',
-
-        headers:{
-          'Content-Type':'application/json'
-        },
-
-        body:JSON.stringify({
-
-          bank_id:$('bank').value,
-
-          message:t,
-
-          history:history.slice(-6)
-
-        })
-
-      });
+        $("log").appendChild(d);
 
 
-    if(!r.ok){
-
-      throw new Error(
-        r.status === 429
-          ? 'Too many requests. Please wait a moment.'
-          : 'Server error.'
-      );
+        $("log").scrollTop =
+            $("log").scrollHeight;
 
     }
 
 
-    const d =
-      await r.json();
+
+    /* STATUS */
+
+    const status = text => {
+
+        $("status").textContent = text;
+
+    };
 
 
-    add(d.reply,'bot');
+
+    /* TEXT TO SPEECH */
+
+    function speak(text) {
+
+        if (
+            !$("speakOn").checked ||
+            !("speechSynthesis" in window)
+        ) {
+            return;
+        }
 
 
-    if(d.escalate)
-
-      tag('Escalating to a human agent');
+        speechSynthesis.cancel();
 
 
-    history.push(
-      {
-        role:'user',
-        content:t
-      },
-      {
-        role:'assistant',
-        content:d.reply
-      }
-    );
+        const utterance =
+            new SpeechSynthesisUtterance(text);
 
 
-    status('');
+        utterance.lang =
+            $("lang").value;
 
-    speak(d.reply);
 
-  }
+        utterance.onstart = () => {
 
-  catch(e){
+            status("Speaking...");
+
+        };
+
+
+        utterance.onend = () => {
+
+            if (!listening && !busy) {
+                status("");
+            }
+
+        };
+
+
+        speechSynthesis.speak(
+            utterance
+        );
+
+    }
+
+
+
+    /* INITIAL GREETING */
 
     add(
-      e.message ||
-      'Something went wrong.',
-      'bot'
+        "Hello! How can I help you today?",
+        "bot"
     );
 
-    status('');
-
-  }
 
 
-  busy = false;
-}
+    /* SEND MESSAGE */
+
+    async function send() {
+
+        const text =
+            $("text").value.trim();
 
 
-/* SPEECH RECOGNITION */
-
-const SR =
-  window.SpeechRecognition ||
-  window.webkitSpeechRecognition;
+        if (!text || busy) {
+            return;
+        }
 
 
-let rec = null;
-
-let listening = false;
+        $("text").value = "";
 
 
-if(SR){
-
-  rec = new SR();
-
-  rec.interimResults = true;
-
-  rec.continuous = false;
+        busy = true;
 
 
-  rec.onstart = () => {
-
-    listening = true;
-
-    $('mic').classList.add('on');
-
-    $('micLabel').textContent =
-      'Listening...';
-
-    status('Listening...');
-
-  };
+        add(
+            text,
+            "user"
+        );
 
 
-  rec.onresult = e => {
-
-    const r =
-      e.results[
-        e.results.length - 1
-      ];
+        status("Thinking...");
 
 
-    $('text').value =
-      r[0].transcript;
+        try {
+
+            const response =
+                await fetch(
+                    "/api/chat",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+
+                            message: text,
+
+                            history:
+                                history.slice(-6)
+
+                        })
+
+                    }
+                );
 
 
-    if(r.isFinal){
+            if (!response.ok) {
 
-      $('micLabel').textContent =
-        'Processing...';
+                throw new Error(
+                    response.status === 429
+                        ? "Too many requests. Please wait a moment."
+                        : "Server error."
+                );
 
-      send();
+            }
+
+
+            const data =
+                await response.json();
+
+
+            add(
+                data.reply,
+                "bot"
+            );
+
+
+            history.push(
+
+                {
+                    role: "user",
+                    content: text
+                },
+
+                {
+                    role: "assistant",
+                    content: data.reply
+                }
+
+            );
+
+
+            status("");
+
+
+            speak(
+                data.reply
+            );
+
+        }
+
+
+        catch (error) {
+
+            add(
+                error.message ||
+                "Something went wrong.",
+                "bot"
+            );
+
+
+            status("");
+
+        }
+
+
+        busy = false;
 
     }
 
-  };
 
 
-  rec.onerror = e => {
+    /* SPEECH RECOGNITION */
 
-    status(
-      e.error === 'not-allowed'
-        ? 'Microphone access was blocked.'
-        : 'Mic error: ' + e.error
-    );
-
-  };
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
 
 
-  rec.onend = () => {
+    let recognition = null;
 
-    listening = false;
 
-    $('mic').classList.remove('on');
 
-    if(!busy){
+    if (SpeechRecognition) {
 
-      $('micLabel').textContent =
-        'Tap to speak';
+        recognition =
+            new SpeechRecognition();
 
-      status('');
+
+        recognition.interimResults =
+            true;
+
+
+        recognition.continuous =
+            false;
+
+
+
+        /* START LISTENING */
+
+        recognition.onstart = () => {
+
+            listening = true;
+
+
+            $("mic").classList.add(
+                "on"
+            );
+
+
+            $("micLabel").textContent =
+                "Listening...";
+
+
+            status(
+                "Listening..."
+            );
+
+        };
+
+
+
+        /* SPEECH RESULT */
+
+        recognition.onresult = event => {
+
+            const result =
+                event.results[
+                    event.results.length - 1
+                ];
+
+
+            $("text").value =
+                result[0].transcript;
+
+
+            if (result.isFinal) {
+
+                $("micLabel").textContent =
+                    "Processing...";
+
+
+                send();
+
+            }
+
+        };
+
+
+
+        /* SPEECH ERROR */
+
+        recognition.onerror = event => {
+
+            status(
+
+                event.error ===
+                "not-allowed"
+
+                    ? "Microphone access was blocked."
+
+                    : "Mic error: " +
+                      event.error
+
+            );
+
+        };
+
+
+
+        /* STOP LISTENING */
+
+        recognition.onend = () => {
+
+            listening = false;
+
+
+            $("mic").classList.remove(
+                "on"
+            );
+
+
+            if (!busy) {
+
+                $("micLabel").textContent =
+                    "Tap to speak";
+
+
+                status("");
+
+            }
+
+        };
 
     }
 
-  };
 
-}
+    else {
 
-else{
-
-  $('mic').disabled = true;
-
-  $('mic').style.opacity = .4;
-
-  $('micLabel').textContent =
-    'Speech recognition unavailable';
-
-  status(
-    'Speech recognition needs Chrome or Edge. You can still type.'
-  );
-
-}
+        $("mic").disabled = true;
 
 
-/* BIG MIC BUTTON */
-
-$('mic').onclick = () => {
-
-  if(!rec)
-    return;
+        $("mic").style.opacity = "0.4";
 
 
-  speechSynthesis.cancel();
+        $("micLabel").textContent =
+            "Speech recognition unavailable";
 
 
-  if(listening){
+        status(
+            "Speech recognition needs Chrome or Edge."
+        );
 
-    rec.stop();
-
-    return;
-
-  }
+    }
 
 
-  rec.lang =
-    $('lang').value;
+
+    /* MICROPHONE BUTTON */
+
+    $("mic").onclick = () => {
+
+        if (!recognition) {
+            return;
+        }
 
 
-  try{
-
-    rec.start();
-
-  }
-
-  catch(e){
-
-    console.log(e);
-
-  }
-
-};
+        speechSynthesis.cancel();
 
 
-/* SEND BUTTON */
+        if (listening) {
 
-$('send').onclick = send;
+            recognition.stop();
 
+            return;
 
-/* ENTER KEY */
-
-$('text').addEventListener(
-  'keydown',
-  e => {
-
-    if(e.key === 'Enter')
-
-      send();
-
-  }
-);
+        }
 
 
-/* BANK CHANGE */
-
-$('bank').onchange = greet;
-
-
-/* LOAD BANKS */
-
-fetch('/api/banks')
-
-  .then(r => r.json())
-
-  .then(b => {
-
-    banks = b;
+        recognition.lang =
+            $("lang").value;
 
 
-    b.forEach(x => {
+        try {
 
-      const o =
-        document.createElement('option');
+            recognition.start();
 
-      o.value = x.id;
+        }
 
-      o.textContent = x.name;
+        catch (error) {
 
-      $('bank').appendChild(o);
+            console.log(error);
 
-    });
+        }
+
+    };
 
 
-    greet();
 
-  })
+    /* SEND BUTTON */
 
-  .catch(e => {
+    $("send").onclick =
+        send;
 
-    console.error(e);
 
-    status(
-      'Could not load chatbot modes.'
+
+    /* ENTER KEY */
+
+    $("text").addEventListener(
+        "keydown",
+        event => {
+
+            if (event.key === "Enter") {
+                send();
+            }
+
+        }
     );
-
-  });
 
 </script>
 
-</body>
-</html>
 
+</body>
+
+</html>
+```
