@@ -19,12 +19,8 @@ from .safety import find_sensitive, mask
 
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-# Valid Gemini model IDs (as of late 2025):
-#   gemini-2.0-flash-lite   <- fast + cheap, good default
-#   gemini-2.0-flash
-#   gemini-2.5-flash-lite
-#   gemini-2.5-flash
-MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash-lite").strip()
+# Hardcoded as a verified real, free tier model with highest rate limits
+MODEL = "gemini-2.5-flash-lite"
 
 DAILY_CAP = int(os.getenv("DAILY_LLM_CAP", "200"))
 RATE_PER_MIN = int(os.getenv("RATE_PER_MIN", "20"))
@@ -73,8 +69,6 @@ Always reply in the same language as the user.
 
 app = FastAPI(title="AI Voice Assistant")
 
-# Allow the frontend to be served from a different origin during dev
-# (e.g. you open index.html directly, or run a separate static server).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -253,7 +247,7 @@ def health():
 
 
 # =========================================================
-# BANKS (kept so /api/banks doesn't 404 if called)
+# BANKS
 # =========================================================
 
 @app.get("/api/banks")
@@ -278,7 +272,6 @@ def chat(body: ChatIn, request: Request):
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    # SAFETY CHECK
     if find_sensitive(message):
         log.info("Blocked sensitive message")
         return {
@@ -290,7 +283,6 @@ def chat(body: ChatIn, request: Request):
             "mode": "blocked",
         }
 
-    # API KEY CHECK
     if not API_KEY:
         log.error("GEMINI_API_KEY is missing")
         return {
@@ -298,7 +290,6 @@ def chat(body: ChatIn, request: Request):
             "mode": "unavailable",
         }
 
-    # DAILY LIMIT
     if not llm_allowed():
         log.warning("Daily Gemini limit reached")
         return {
@@ -309,7 +300,6 @@ def chat(body: ChatIn, request: Request):
             "mode": "unavailable",
         }
 
-    # GEMINI
     try:
         reply = generate_reply(body.history, message)
         log.info("Gemini request successful")
@@ -317,19 +307,18 @@ def chat(body: ChatIn, request: Request):
 
     except Exception as error:
         log.exception("Gemini request failed: %s", error)
-        # Surface a hint in dev so you know what actually broke.
         return {
             "reply": (
                 "I couldn't get a response from the AI right now. "
                 "Please try again."
             ),
             "mode": "error",
-            "detail": str(error)[:200],  # remove if you don't want this public
+            "detail": str(error)[:200],
         }
 
 
 # =========================================================
-# FRONTEND (mounted last so /health and /api/* win)
+# FRONTEND
 # =========================================================
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
