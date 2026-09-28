@@ -1,0 +1,31 @@
+{
+  "id": "lotus",
+  "name": "Lotus Co-operative Bank",
+  "greeting": "Welcome to Lotus Co-operative Bank. How can I help with your error today?",
+  "escalation_number": "1800 000 2001",
+  "urgent_number": "1800 000 2002",
+  "support_hours": "open 10 AM to 6 PM, Monday to Saturday",
+  "_note": "Fictional bank and invented error codes for demo purposes.",
+  "entries": [
+    {"code": "E104", "title": "International card usage disabled",
+     "keywords": ["card", "international", "abroad", "foreign", "overseas", "declined", "travel"],
+     "cause": "International transactions are disabled on your debit card.",
+     "fix": "Enable international usage from the Lotus mobile app, or visit your home branch with ID."},
+    {"code": "E220", "title": "UPI PIN attempts exceeded",
+     "keywords": ["upi", "pin", "attempts", "exceeded", "wrong", "blocked", "retry"],
+     "cause": "Too many wrong UPI PIN entries temporarily blocked your UPI.",
+     "fix": "Wait 24 hours, or reset your UPI PIN in the app using your debit card details."},
+    {"code": "E405", "title": "ATM debited but cash not dispensed",
+     "keywords": ["atm", "cash", "debited", "dispensed", "money", "deducted", "withdrawal"],
+     "cause": "The ATM transaction failed after your account was debited.",
+     "fix": "The amount is reversed automatically in 5 to 7 working days. If not, raise a complaint with the transaction ID at your branch."},
+    {"code": "E510", "title": "NEFT beneficiary not active",
+     "keywords": ["neft", "beneficiary", "payee", "transfer", "added", "activate", "inactive"],
+     "cause": "A newly added beneficiary needs a 30 minute activation period.",
+     "fix": "Wait 30 minutes after adding the beneficiary, then try the transfer again."},
+    {"code": "E601", "title": "Passbook update failed",
+     "keywords": ["passbook", "update", "printer", "kiosk", "failed", "print"],
+     "cause": "The passbook barcode could not be read by the kiosk.",
+     "fix": "Ask branch staff to update it at the counter, or request a new passbook."}
+  ]
+}
