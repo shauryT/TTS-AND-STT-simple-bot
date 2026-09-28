@@ -549,225 +549,140 @@
 
 <script>
 
-    const $ = id =>
-        document.getElementById(id);
-
+    const $ = id => document.getElementById(id);
 
     let history = [];
-
     let busy = false;
-
     let listening = false;
-
 
 
     /* ADD MESSAGE */
 
     function add(text, cls) {
-
-        const d =
-            document.createElement("div");
-
-
-        d.className =
-            "msg " + cls;
-
-
+        const d = document.createElement("div");
+        d.className = "msg " + cls;
         d.textContent = text;
-
-
         $("log").appendChild(d);
-
-
-        $("log").scrollTop =
-            $("log").scrollHeight;
-
+        $("log").scrollTop = $("log").scrollHeight;
     }
-
 
 
     /* STATUS */
 
-    const status = text => {
-
-        $("status").textContent = text;
-
-    };
-
+    const status = text => { $("status").textContent = text; };
 
 
     /* TEXT TO SPEECH */
 
     function speak(text) {
-
-        if (
-            !$("speakOn").checked ||
-            !("speechSynthesis" in window)
-        ) {
+        if (!$("speakOn").checked || !("speechSynthesis" in window)) {
             return;
         }
 
-
         speechSynthesis.cancel();
 
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = $("lang").value;
 
-        const utterance =
-            new SpeechSynthesisUtterance(text);
-
-
-        utterance.lang =
-            $("lang").value;
-
-
-        utterance.onstart = () => {
-
-            status("Speaking...");
-
-        };
-
+        utterance.onstart = () => { status("Speaking..."); };
 
         utterance.onend = () => {
-
             if (!listening && !busy) {
                 status("");
             }
-
         };
 
-
-        speechSynthesis.speak(
-            utterance
-        );
-
+        speechSynthesis.speak(utterance);
     }
-
 
 
     /* INITIAL GREETING */
 
-    add(
-        "Hello! How can I help you today?",
-        "bot"
-    );
-
+    add("Hello! How can I help you today?", "bot");
 
 
     /* SEND MESSAGE */
 
-    async function send() {
+    async function send(textOverride) {
 
-        const text =
-            $("text").value.trim();
-
+        const text = (textOverride ?? $("text").value).trim();
 
         if (!text || busy) {
             return;
         }
 
-
         $("text").value = "";
-
 
         busy = true;
 
-
-        add(
-            text,
-            "user"
-        );
-
-
+        add(text, "user");
         status("Thinking...");
 
+        // Abort if the server takes more than 45s (Render cold start).
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
 
         try {
 
-            const response =
-                await fetch(
-                    "/api/chat",
-                    {
-                        method: "POST",
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
+                body: JSON.stringify({
+                    message: text,
+                    history: history.slice(-6),
+                }),
+            });
 
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-
-                        body: JSON.stringify({
-
-                            message: text,
-
-                            history:
-                                history.slice(-6)
-
-                        })
-
-                    }
-                );
-
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
+                let detail = "";
+                try {
+                    const errJson = await response.json();
+                    detail = errJson.detail || "";
+                } catch (_) {}
 
                 throw new Error(
                     response.status === 429
                         ? "Too many requests. Please wait a moment."
-                        : "Server error."
+                        : `Server error ${response.status}. ${detail}`.trim()
                 );
-
             }
 
+            const data = await response.json();
 
-            const data =
-                await response.json();
-
-
-            add(
-                data.reply,
-                "bot"
-            );
-
+            add(data.reply, "bot");
 
             history.push(
-
-                {
-                    role: "user",
-                    content: text
-                },
-
-                {
-                    role: "assistant",
-                    content: data.reply
-                }
-
+                { role: "user", content: text },
+                { role: "assistant", content: data.reply }
             );
-
 
             status("");
-
-
-            speak(
-                data.reply
-            );
+            speak(data.reply);
 
         }
-
-
         catch (error) {
 
-            add(
-                error.message ||
-                "Something went wrong.",
-                "bot"
-            );
+            clearTimeout(timeoutId);
 
+            let msg = "Something went wrong.";
 
+            if (error.name === "AbortError") {
+                msg = "The server took too long to respond (it may be waking up). Please try again.";
+            } else if (!navigator.onLine) {
+                msg = "You appear to be offline. Check your internet connection.";
+            } else if (error.message) {
+                msg = error.message;
+            }
+
+            add(msg, "bot");
             status("");
 
         }
 
-
         busy = false;
-
     }
 
 
@@ -775,144 +690,98 @@
     /* SPEECH RECOGNITION */
 
     const SpeechRecognition =
-        window.SpeechRecognition ||
-        window.webkitSpeechRecognition;
-
+        window.SpeechRecognition || window.webkitSpeechRecognition;
 
     let recognition = null;
 
+    // Accumulates final results across a single "session"
+    let finalTranscript = "";
 
 
     if (SpeechRecognition) {
 
-        recognition =
-            new SpeechRecognition();
+        recognition = new SpeechRecognition();
 
+        // KEY FIX: keep listening through pauses
+        recognition.interimResults = true;
+        recognition.continuous = true;
+        recognition.maxAlternatives = 1;
 
-        recognition.interimResults =
-            true;
-
-
-        recognition.continuous =
-            false;
-
-
-
-        /* START LISTENING */
 
         recognition.onstart = () => {
-
             listening = true;
-
-
-            $("mic").classList.add(
-                "on"
-            );
-
-
-            $("micLabel").textContent =
-                "Listening...";
-
-
-            status(
-                "Listening..."
-            );
-
+            finalTranscript = "";
+            $("mic").classList.add("on");
+            $("micLabel").textContent = "Listening...";
+            status("Listening...");
         };
 
-
-
-        /* SPEECH RESULT */
 
         recognition.onresult = event => {
 
-            const result =
-                event.results[
-                    event.results.length - 1
-                ];
+            let interim = "";
 
+            // Only look at NEW results since last event
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
 
-            $("text").value =
-                result[0].transcript;
-
-
-            if (result.isFinal) {
-
-                $("micLabel").textContent =
-                    "Processing...";
-
-
-                send();
-
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript + " ";
+                } else {
+                    interim += transcript;
+                }
             }
 
+            // Show live preview in the text box
+            $("text").value = (finalTranscript + interim).trim();
+
+            // Update the little label under the mic
+            if (interim) {
+                $("micLabel").textContent = interim.trim().slice(0, 40);
+            }
         };
 
-
-
-        /* SPEECH ERROR */
 
         recognition.onerror = event => {
 
+            // "no-speech" is normal when the user is quiet — don't scare them
+            if (event.error === "no-speech") {
+                return;
+            }
+
             status(
-
-                event.error ===
-                "not-allowed"
-
+                event.error === "not-allowed"
                     ? "Microphone access was blocked."
-
-                    : "Mic error: " +
-                      event.error
-
+                    : "Mic error: " + event.error
             );
-
         };
 
-
-
-        /* STOP LISTENING */
 
         recognition.onend = () => {
 
             listening = false;
+            $("mic").classList.remove("on");
 
+            const text = finalTranscript.trim();
 
-            $("mic").classList.remove(
-                "on"
-            );
-
-
-            if (!busy) {
-
-                $("micLabel").textContent =
-                    "Tap to speak";
-
-
+            if (text && !busy) {
+                $("micLabel").textContent = "Processing...";
+                send(text);
+            } else if (!busy) {
+                $("micLabel").textContent = "Tap to speak";
                 status("");
-
             }
 
+            finalTranscript = "";
         };
 
     }
-
-
     else {
 
         $("mic").disabled = true;
-
-
         $("mic").style.opacity = "0.4";
-
-
-        $("micLabel").textContent =
-            "Speech recognition unavailable";
-
-
-        status(
-            "Speech recognition needs Chrome or Edge."
-        );
-
+        $("micLabel").textContent = "Speech recognition unavailable";
+        status("Speech recognition needs Chrome or Edge.");
     }
 
 
@@ -921,62 +790,42 @@
 
     $("mic").onclick = () => {
 
-        if (!recognition) {
-            return;
-        }
-
+        if (!recognition) return;
 
         speechSynthesis.cancel();
 
-
         if (listening) {
-
+            // Force the session to end so onend fires and send() runs
             recognition.stop();
-
             return;
-
         }
 
-
-        recognition.lang =
-            $("lang").value;
-
+        recognition.lang = $("lang").value;
 
         try {
-
             recognition.start();
-
         }
-
         catch (error) {
-
+            // "already started" is harmless
             console.log(error);
-
         }
-
     };
 
 
 
     /* SEND BUTTON */
 
-    $("send").onclick =
-        send;
+    $("send").onclick = () => send();
 
 
 
     /* ENTER KEY */
 
-    $("text").addEventListener(
-        "keydown",
-        event => {
-
-            if (event.key === "Enter") {
-                send();
-            }
-
+    $("text").addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            send();
         }
-    );
+    });
 
 </script>
 
@@ -984,4 +833,3 @@
 </body>
 
 </html>
-```
