@@ -1,4 +1,6 @@
 import logging
+from dotenv import load_dotenv
+load_dotenv()
 import os
 import time
 from collections import defaultdict, deque
