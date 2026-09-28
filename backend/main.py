@@ -1,5 +1,3 @@
-"""Voice assistant backend: safety check -> Gemini reply."""
-
 import logging
 import os
 import time
@@ -7,6 +5,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -14,94 +13,150 @@ from pydantic import BaseModel, Field
 from .safety import find_sensitive, mask
 
 
-# ---------------------------------------------------------
-# Logging
-# ---------------------------------------------------------
+# =========================================================
+# LOAD ENVIRONMENT
+# =========================================================
 
-logging.basicConfig(level=logging.INFO)
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = BASE_DIR / ".env"
+
+load_dotenv(ENV_FILE)
+
+
+# =========================================================
+# LOGGING
+# =========================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
+
 log = logging.getLogger("voice")
 
 
-# ---------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------
+# =========================================================
+# GEMINI CONFIG
+# =========================================================
 
-MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-API_KEY = os.getenv("GEMINI_API_KEY")
+API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-DAILY_CAP = int(os.getenv("DAILY_LLM_CAP", "200"))
-RATE_PER_MIN = int(os.getenv("RATE_PER_MIN", "20"))
+MODEL = os.getenv(
+    "LLM_MODEL",
+    "gemini-3.5-flash-lite"
+).strip()
 
+DAILY_CAP = int(
+    os.getenv("DAILY_LLM_CAP", "200")
+)
+
+RATE_PER_MIN = int(
+    os.getenv("RATE_PER_MIN", "20")
+)
+
+
+# =========================================================
+# SYSTEM PROMPT
+# =========================================================
 
 SYSTEM = """
 You are a friendly AI voice assistant.
 
-Keep your responses short and natural because they may be spoken aloud.
-Use 1 to 3 short sentences.
-Do not use markdown, bullet points, emojis, or complicated formatting.
+Your responses will usually be spoken aloud.
+
+Keep replies natural, short and conversational.
+Use 1 to 3 short sentences unless the user asks for more detail.
+
+Do not use markdown.
+Do not use bullet points.
+Do not use emojis.
 
 Answer the user's question directly.
-Be accurate and say when you are unsure.
+
+Be accurate.
+If you are unsure about something, say that you are unsure.
 
 Never ask for or repeat:
-- card numbers
-- PINs
-- CVVs
-- OTPs
-- passwords
+card numbers,
+PINs,
+CVVs,
+OTPs,
+passwords,
+or other sensitive authentication information.
 
-Reply in the same language as the user.
+Reply in the same language that the user uses.
 """
 
 
-# ---------------------------------------------------------
-# FastAPI
-# ---------------------------------------------------------
+# =========================================================
+# FASTAPI
+# =========================================================
 
-app = FastAPI(title="AI Voice Assistant")
+app = FastAPI(
+    title="AI Voice Assistant",
+    version="1.0.0"
+)
 
 
-# ---------------------------------------------------------
-# Runtime state
-# ---------------------------------------------------------
+# =========================================================
+# STATE
+# =========================================================
 
 _hits = defaultdict(deque)
 
 _llm_usage = {
     "day": time.strftime("%Y-%m-%d"),
-    "n": 0,
+    "count": 0
 }
 
 _client = None
 
 
-# ---------------------------------------------------------
-# Request models
-# ---------------------------------------------------------
+# =========================================================
+# DATA MODELS
+# =========================================================
 
 class Turn(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(max_length=600)
+    content: str = Field(
+        max_length=600
+    )
 
 
 class ChatIn(BaseModel):
-    message: str = Field(min_length=1, max_length=300)
-    history: list[Turn] = Field(default_factory=list, max_length=12)
+    message: str = Field(
+        min_length=1,
+        max_length=300
+    )
+
+    history: list[Turn] = Field(
+        default_factory=list,
+        max_length=12
+    )
 
 
-# ---------------------------------------------------------
-# Rate limiting
-# ---------------------------------------------------------
+# =========================================================
+# RATE LIMITING
+# =========================================================
 
 def rate_limit(request: Request):
-    forwarded = request.headers.get("x-forwarded-for", "")
+
+    forwarded = request.headers.get(
+        "x-forwarded-for",
+        ""
+    )
 
     ip = (
         forwarded.split(",")[0].strip()
-        or (request.client.host if request.client else "?")
+        or (
+            request.client.host
+            if request.client
+            else "unknown"
+        )
     )
 
     now = time.time()
+
     requests = _hits[ip]
 
     while requests and now - requests[0] > 60:
@@ -116,86 +171,147 @@ def rate_limit(request: Request):
     requests.append(now)
 
 
-# ---------------------------------------------------------
-# Daily Gemini limit
-# ---------------------------------------------------------
+# =========================================================
+# DAILY LIMIT
+# =========================================================
 
-def llm_allowed() -> bool:
+def llm_allowed():
+
     today = time.strftime("%Y-%m-%d")
 
     if _llm_usage["day"] != today:
+
         _llm_usage["day"] = today
-        _llm_usage["n"] = 0
+        _llm_usage["count"] = 0
 
-    return bool(API_KEY) and _llm_usage["n"] < DAILY_CAP
+    return (
+        bool(API_KEY)
+        and
+        _llm_usage["count"] < DAILY_CAP
+    )
 
 
-# ---------------------------------------------------------
-# Build Gemini conversation
-# ---------------------------------------------------------
+# =========================================================
+# BUILD CHAT HISTORY
+# =========================================================
 
-def build_messages(history: list[Turn], message: str) -> list:
+def build_messages(
+    history: list[Turn],
+    message: str
+):
+
     messages = []
 
     for turn in history[-6:]:
-        text = mask(turn.content)
 
-        if not text:
+        content = mask(
+            turn.content
+        ).strip()
+
+        if not content:
             continue
 
-        role = "model" if turn.role == "assistant" else "user"
+        role = (
+            "model"
+            if turn.role == "assistant"
+            else "user"
+        )
 
-        # Merge consecutive messages from the same role
-        if messages and messages[-1]["role"] == role:
-            messages[-1]["content"] += " " + text
+        if (
+            messages
+            and
+            messages[-1]["role"] == role
+        ):
+
+            messages[-1]["content"] += (
+                " " + content
+            )
+
         else:
-            messages.append({
-                "role": role,
-                "content": text
-            })
 
-    # Add current user message
-    current_message = mask(message)
+            messages.append(
+                {
+                    "role": role,
+                    "content": content
+                }
+            )
 
-    if messages and messages[-1]["role"] == "user":
-        messages[-1]["content"] += " " + current_message
+    current = mask(
+        message
+    ).strip()
+
+    if (
+        messages
+        and
+        messages[-1]["role"] == "user"
+    ):
+
+        messages[-1]["content"] += (
+            " " + current
+        )
+
     else:
-        messages.append({
-            "role": "user",
-            "content": current_message
-        })
+
+        messages.append(
+            {
+                "role": "user",
+                "content": current
+            }
+        )
 
     return messages
 
 
-# ---------------------------------------------------------
-# Gemini request
-# ---------------------------------------------------------
+# =========================================================
+# CREATE GEMINI CLIENT
+# =========================================================
 
-def ask_gemini(history: list[Turn], message: str) -> str:
+def get_gemini_client():
+
     global _client
 
     if not API_KEY:
         raise RuntimeError(
-            "GEMINI_API_KEY is not configured."
+            "GEMINI_API_KEY was not found in .env"
         )
 
-    from google import genai
-    from google.genai import types
-
-    # Create client only once
     if _client is None:
-        log.info("Creating Gemini client...")
+
+        log.info(
+            "Creating Gemini client"
+        )
+
+        from google import genai
 
         _client = genai.Client(
             api_key=API_KEY
         )
 
-    conversation = build_messages(history, message)
+    return _client
+
+
+# =========================================================
+# ASK GEMINI
+# =========================================================
+
+def ask_gemini(
+    history: list[Turn],
+    message: str
+):
+
+    from google.genai import types
+
+    client = get_gemini_client()
+
+    messages = build_messages(
+        history,
+        message
+    )
 
     contents = []
 
-    for item in conversation:
+    for item in messages:
+
         contents.append(
             types.Content(
                 role=item["role"],
@@ -208,73 +324,86 @@ def ask_gemini(history: list[Turn], message: str) -> str:
         )
 
     log.info(
-        "Sending request to Gemini model=%s",
+        "Sending request to Gemini | model=%s",
         MODEL
     )
 
-    response = _client.models.generate_content(
+    response = client.models.generate_content(
         model=MODEL,
         contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM,
             max_output_tokens=300,
-            temperature=0.7,
-        ),
+            temperature=0.7
+        )
     )
 
-    _llm_usage["n"] += 1
+    _llm_usage["count"] += 1
 
-    reply = (response.text or "").strip()
+    reply = (
+        response.text or ""
+    ).strip()
 
     if not reply:
-        return "Sorry, I couldn't generate a response."
+        return (
+            "I couldn't generate a response. "
+            "Could you try asking that again?"
+        )
 
     return reply
 
 
-# ---------------------------------------------------------
-# Health check
-# ---------------------------------------------------------
+# =========================================================
+# HEALTH
+# =========================================================
 
 @app.get("/health")
 def health():
+
     return {
         "ok": True,
-        "llm_configured": bool(API_KEY),
+        "gemini_configured": bool(API_KEY),
         "model": MODEL,
-        "requests_today": _llm_usage["n"],
+        "requests_today": _llm_usage["count"]
     }
 
 
-# ---------------------------------------------------------
-# Chat endpoint
-# ---------------------------------------------------------
+# =========================================================
+# CHAT
+# =========================================================
 
 @app.post("/api/chat")
-def chat(body: ChatIn, request: Request):
+def chat(
+    body: ChatIn,
+    request: Request
+):
 
     rate_limit(request)
 
     message = body.message.strip()
 
     if not message:
+
         raise HTTPException(
             status_code=400,
             detail="Message cannot be empty."
         )
 
     # -----------------------------------------------------
-    # Safety check
+    # SAFETY
     # -----------------------------------------------------
 
     if find_sensitive(message):
 
         reply = (
-            "For your security, please don't share card numbers, "
-            "PINs, OTPs or passwords here. What else can I help with?"
+            "For your security, please don't share "
+            "card numbers, PINs, OTPs or passwords here. "
+            "What else can I help with?"
         )
 
-        log.info("mode=blocked")
+        log.info(
+            "Chat blocked by safety check"
+        )
 
         return {
             "reply": reply,
@@ -282,35 +411,43 @@ def chat(body: ChatIn, request: Request):
         }
 
     # -----------------------------------------------------
-    # Gemini availability
+    # API KEY
     # -----------------------------------------------------
 
     if not API_KEY:
 
-        log.error("GEMINI_API_KEY is missing.")
+        log.error(
+            "GEMINI_API_KEY is missing."
+        )
 
         return {
             "reply": (
-                "The AI service isn't configured yet. "
+                "The AI service is not configured. "
                 "Please check the Gemini API key."
             ),
             "mode": "unavailable"
         }
 
+    # -----------------------------------------------------
+    # DAILY LIMIT
+    # -----------------------------------------------------
+
     if not llm_allowed():
 
-        log.warning("Daily Gemini request limit reached.")
+        log.warning(
+            "Daily Gemini limit reached."
+        )
 
         return {
             "reply": (
-                "The AI service has reached its daily limit. "
-                "Please try again later."
+                "The AI service has reached "
+                "its daily limit. Please try again later."
             ),
             "mode": "unavailable"
         }
 
     # -----------------------------------------------------
-    # Gemini
+    # GEMINI
     # -----------------------------------------------------
 
     try:
@@ -320,7 +457,9 @@ def chat(body: ChatIn, request: Request):
             message
         )
 
-        log.info("mode=llm")
+        log.info(
+            "Gemini response successful"
+        )
 
         return {
             "reply": reply,
@@ -329,35 +468,42 @@ def chat(body: ChatIn, request: Request):
 
     except Exception as error:
 
-        # IMPORTANT:
-        # Print the real Gemini error in the backend terminal.
+        # Print the REAL error to the terminal.
         log.exception(
-            "Gemini request failed: %s",
-            error
+            "GEMINI REQUEST FAILED"
         )
 
         return {
             "reply": (
-                "I couldn't connect to the AI service right now. "
-                "Please try again."
+                "I couldn't get a response from "
+                "the AI right now. Please try again."
             ),
             "mode": "error"
         }
 
 
-# ---------------------------------------------------------
-# Frontend
-# ---------------------------------------------------------
+# =========================================================
+# FRONTEND
+# =========================================================
 
-frontend_path = (
-    Path(__file__).resolve().parent.parent / "frontend"
+FRONTEND_DIR = (
+    BASE_DIR / "frontend"
 )
 
-app.mount(
-    "/",
-    StaticFiles(
-        directory=frontend_path,
-        html=True
-    ),
-    name="frontend"
-)
+if FRONTEND_DIR.exists():
+
+    app.mount(
+        "/",
+        StaticFiles(
+            directory=FRONTEND_DIR,
+            html=True
+        ),
+        name="frontend"
+    )
+
+else:
+
+    log.warning(
+        "Frontend directory not found: %s",
+        FRONTEND_DIR
+    )
