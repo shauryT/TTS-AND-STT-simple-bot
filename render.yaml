@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: bank-voice-assistant
+    name: voice-assistant
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -9,9 +9,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
       - key: LLM_MODEL
-        value: claude-haiku-4-5-20251001
+        value: gemini-3.5-flash-lite
       - key: DAILY_LLM_CAP
         value: "200"
