@@ -1,4 +1,5 @@
 """Voice assistant backend: safety check -> Gemini reply."""
+
 import logging
 import os
 import time
@@ -12,26 +13,71 @@ from pydantic import BaseModel, Field
 
 from .safety import find_sensitive, mask
 
+
+# ---------------------------------------------------------
+# Logging
+# ---------------------------------------------------------
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("voice")
 
-MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
+
+# ---------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------
+
+MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 API_KEY = os.getenv("GEMINI_API_KEY")
+
 DAILY_CAP = int(os.getenv("DAILY_LLM_CAP", "200"))
 RATE_PER_MIN = int(os.getenv("RATE_PER_MIN", "20"))
 
-SYSTEM = (
-    "You are a friendly voice assistant. Your replies are spoken aloud: use 1 to 3 short "
-    "plain sentences, no markdown, lists or emojis. Be accurate and say so when you are "
-    "unsure. Never ask for or repeat card numbers, PINs, CVVs, OTPs or passwords. "
-    "Reply in the user's language."
-)
 
-app = FastAPI(title="Voice Assistant")
+SYSTEM = """
+You are a friendly AI voice assistant.
+
+Keep your responses short and natural because they may be spoken aloud.
+Use 1 to 3 short sentences.
+Do not use markdown, bullet points, emojis, or complicated formatting.
+
+Answer the user's question directly.
+Be accurate and say when you are unsure.
+
+Never ask for or repeat:
+- card numbers
+- PINs
+- CVVs
+- OTPs
+- passwords
+
+Reply in the same language as the user.
+"""
+
+
+# ---------------------------------------------------------
+# FastAPI
+# ---------------------------------------------------------
+
+app = FastAPI(title="AI Voice Assistant")
+
+
+# ---------------------------------------------------------
+# Runtime state
+# ---------------------------------------------------------
+
 _hits = defaultdict(deque)
-_llm_usage = {"day": time.strftime("%Y-%m-%d"), "n": 0}
+
+_llm_usage = {
+    "day": time.strftime("%Y-%m-%d"),
+    "n": 0,
+}
+
 _client = None
 
+
+# ---------------------------------------------------------
+# Request models
+# ---------------------------------------------------------
 
 class Turn(BaseModel):
     role: Literal["user", "assistant"]
@@ -43,83 +89,275 @@ class ChatIn(BaseModel):
     history: list[Turn] = Field(default_factory=list, max_length=12)
 
 
-def rate_limit(request: Request):
-    fwd = request.headers.get("x-forwarded-for", "")
-    ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
-    now, dq = time.time(), _hits[ip]
-    while dq and now - dq[0] > 60:
-        dq.popleft()
-    if len(dq) >= RATE_PER_MIN:
-        raise HTTPException(429, "Too many requests, please slow down.")
-    dq.append(now)
+# ---------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------
 
+def rate_limit(request: Request):
+    forwarded = request.headers.get("x-forwarded-for", "")
+
+    ip = (
+        forwarded.split(",")[0].strip()
+        or (request.client.host if request.client else "?")
+    )
+
+    now = time.time()
+    requests = _hits[ip]
+
+    while requests and now - requests[0] > 60:
+        requests.popleft()
+
+    if len(requests) >= RATE_PER_MIN:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please slow down."
+        )
+
+    requests.append(now)
+
+
+# ---------------------------------------------------------
+# Daily Gemini limit
+# ---------------------------------------------------------
 
 def llm_allowed() -> bool:
     today = time.strftime("%Y-%m-%d")
+
     if _llm_usage["day"] != today:
-        _llm_usage.update(day=today, n=0)
+        _llm_usage["day"] = today
+        _llm_usage["n"] = 0
+
     return bool(API_KEY) and _llm_usage["n"] < DAILY_CAP
 
 
-def build_msgs(history: list, message: str) -> list:
-    """Turn recent history + the new message into alternating user/assistant turns."""
-    msgs = []
-    for t in history[-6:]:
-        text = mask(t.content)
-        if msgs and msgs[-1]["role"] == t.role:
-            msgs[-1]["content"] += " " + text
-        elif msgs or t.role == "user":
-            msgs.append({"role": t.role, "content": text})
-    if msgs and msgs[-1]["role"] == "user":
-        msgs[-1]["content"] += " " + message
+# ---------------------------------------------------------
+# Build Gemini conversation
+# ---------------------------------------------------------
+
+def build_messages(history: list[Turn], message: str) -> list:
+    messages = []
+
+    for turn in history[-6:]:
+        text = mask(turn.content)
+
+        if not text:
+            continue
+
+        role = "model" if turn.role == "assistant" else "user"
+
+        # Merge consecutive messages from the same role
+        if messages and messages[-1]["role"] == role:
+            messages[-1]["content"] += " " + text
+        else:
+            messages.append({
+                "role": role,
+                "content": text
+            })
+
+    # Add current user message
+    current_message = mask(message)
+
+    if messages and messages[-1]["role"] == "user":
+        messages[-1]["content"] += " " + current_message
     else:
-        msgs.append({"role": "user", "content": message})
-    return msgs
+        messages.append({
+            "role": "user",
+            "content": current_message
+        })
+
+    return messages
 
 
-def general_reply(history: list, message: str) -> str:
+# ---------------------------------------------------------
+# Gemini request
+# ---------------------------------------------------------
+
+def ask_gemini(history: list[Turn], message: str) -> str:
     global _client
+
+    if not API_KEY:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured."
+        )
+
     from google import genai
     from google.genai import types
 
+    # Create client only once
     if _client is None:
-        _client = genai.Client(api_key=API_KEY, http_options=types.HttpOptions(timeout=20000))
-    contents = [
-        types.Content(role="model" if m["role"] == "assistant" else "user",
-                      parts=[types.Part(text=m["content"])])
-        for m in build_msgs(history, message)
-    ]
-    r = _client.models.generate_content(
-        model=MODEL, contents=contents,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM, max_output_tokens=500),
-    )
-    _llm_usage["n"] += 1
-    return (r.text or "").strip() or "Sorry, I didn't catch that. Could you say it again?"
+        log.info("Creating Gemini client...")
 
+        _client = genai.Client(
+            api_key=API_KEY
+        )
+
+    conversation = build_messages(history, message)
+
+    contents = []
+
+    for item in conversation:
+        contents.append(
+            types.Content(
+                role=item["role"],
+                parts=[
+                    types.Part(
+                        text=item["content"]
+                    )
+                ]
+            )
+        )
+
+    log.info(
+        "Sending request to Gemini model=%s",
+        MODEL
+    )
+
+    response = _client.models.generate_content(
+        model=MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM,
+            max_output_tokens=300,
+            temperature=0.7,
+        ),
+    )
+
+    _llm_usage["n"] += 1
+
+    reply = (response.text or "").strip()
+
+    if not reply:
+        return "Sorry, I couldn't generate a response."
+
+    return reply
+
+
+# ---------------------------------------------------------
+# Health check
+# ---------------------------------------------------------
 
 @app.get("/health")
 def health():
-    return {"ok": True, "llm": bool(API_KEY)}
+    return {
+        "ok": True,
+        "llm_configured": bool(API_KEY),
+        "model": MODEL,
+        "requests_today": _llm_usage["n"],
+    }
 
+
+# ---------------------------------------------------------
+# Chat endpoint
+# ---------------------------------------------------------
 
 @app.post("/api/chat")
 def chat(body: ChatIn, request: Request):
+
     rate_limit(request)
-    msg = body.message.strip()
-    if find_sensitive(msg):
-        mode, reply = "blocked", ("For your security, please don't share card numbers, PINs, "
-                                  "OTPs or passwords here. What else can I help with?")
-    elif not llm_allowed():
-        mode, reply = "unavailable", "I'm unavailable right now. Please try again later."
-    else:
-        try:
-            mode, reply = "llm", general_reply(body.history, msg)
-        except Exception as e:
-            log.warning("LLM failed: %s", type(e).__name__)
-            mode, reply = "error", "I'm a bit busy right now. Please try again in a moment."
-    # Log metadata only, never what the user said.
-    log.info("mode=%s", mode)
-    return {"reply": reply, "mode": mode}
+
+    message = body.message.strip()
+
+    if not message:
+        raise HTTPException(
+            status_code=400,
+            detail="Message cannot be empty."
+        )
+
+    # -----------------------------------------------------
+    # Safety check
+    # -----------------------------------------------------
+
+    if find_sensitive(message):
+
+        reply = (
+            "For your security, please don't share card numbers, "
+            "PINs, OTPs or passwords here. What else can I help with?"
+        )
+
+        log.info("mode=blocked")
+
+        return {
+            "reply": reply,
+            "mode": "blocked"
+        }
+
+    # -----------------------------------------------------
+    # Gemini availability
+    # -----------------------------------------------------
+
+    if not API_KEY:
+
+        log.error("GEMINI_API_KEY is missing.")
+
+        return {
+            "reply": (
+                "The AI service isn't configured yet. "
+                "Please check the Gemini API key."
+            ),
+            "mode": "unavailable"
+        }
+
+    if not llm_allowed():
+
+        log.warning("Daily Gemini request limit reached.")
+
+        return {
+            "reply": (
+                "The AI service has reached its daily limit. "
+                "Please try again later."
+            ),
+            "mode": "unavailable"
+        }
+
+    # -----------------------------------------------------
+    # Gemini
+    # -----------------------------------------------------
+
+    try:
+
+        reply = ask_gemini(
+            body.history,
+            message
+        )
+
+        log.info("mode=llm")
+
+        return {
+            "reply": reply,
+            "mode": "llm"
+        }
+
+    except Exception as error:
+
+        # IMPORTANT:
+        # Print the real Gemini error in the backend terminal.
+        log.exception(
+            "Gemini request failed: %s",
+            error
+        )
+
+        return {
+            "reply": (
+                "I couldn't connect to the AI service right now. "
+                "Please try again."
+            ),
+            "mode": "error"
+        }
 
 
-app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "frontend", html=True), name="ui")
+# ---------------------------------------------------------
+# Frontend
+# ---------------------------------------------------------
+
+frontend_path = (
+    Path(__file__).resolve().parent.parent / "frontend"
+)
+
+app.mount(
+    "/",
+    StaticFiles(
+        directory=frontend_path,
+        html=True
+    ),
+    name="frontend"
+)
